@@ -1,0 +1,12 @@
+# load packages
+library(terra)
+library(tidyterra)
+library(tidyverse)
+library(patchwork)
+library(greta)
+library(greta.gp)
+library(geodata)
+library(DHARMa)
+library(mapview)
+library(sf)
+library(idpalette)
