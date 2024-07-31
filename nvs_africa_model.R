@@ -1,0 +1,322 @@
+. <- lapply(list.files("R", full.names = TRUE), source)
+set.seed(2024-04-26)
+
+PfPR <- make_5_yr_mean_rast(name = "PfPR")
+Pf_incidence <- make_5_yr_mean_rast(name = "Pf_IncidenceRate")
+treatment_EFT <- make_5_yr_mean_rast(name = "treatment_EFT",
+                                     remove_every_second_layer = FALSE)
+
+# lapply(c(PfPR,Pf_incidence,treatment_EFT), FUN =  plot)
+
+# coarsened version of treatment for prediction
+treatment_EFT_coarse <- terra::aggregate(treatment_EFT,
+                                         10,
+                                         fun="modal" 
+                                         # think this should be treated as categorical to avoid messy country border effect?
+                                         )
+plot(treatment_EFT_coarse)
+
+# # coarsened version of PfPR for prediction
+# PfPR_coarse <- terra::aggregate(PfPR,
+#                                 10,
+#                                 fun="mean"
+# )
+# plot(PfPR_coarse)
+# load marker prevalence data
+snp_data <- readr::read_csv("data/nvs_africa.csv")
+
+# filter to specific coordinates and select just the last 5 years
+year_range <- 5
+year_cutoff <- (snp_data %>% pull(year_start) %>% max) - year_range
+snp_data <- snp_data %>% 
+  filter(
+    site_type != "Country", 
+    year_start > year_cutoff)
+
+snp_table <- table(snp_data$snp_name) %>% 
+  sort(decreasing = TRUE) %>% 
+  as.data.frame() %>% 
+  rename(snp = Var1,
+         count = Freq) %>% 
+  mutate(id = row_number())
+# note we count all SNPs in n_snp, even those not modelled, to keep the id consistent
+n_snp <- n_distinct(snp_table$snp)
+# markers validated by WHO:
+# https://www.who.int/news-room/questions-and-answers/item/artemisinin-resistance
+# note some of these have associated markers, so future job is to code up marker
+# by association matrix
+who_markers <- c("F446I",
+                 "N458Y",
+                 "C469Y",
+                 "M476I",
+                 "Y493H",
+                 "R539T",
+                 "I543T",
+                 "P553L",
+                 "R561H",
+                 "P574L",
+                 "C580Y",
+                 "R622I",
+                 "A675V")
+
+snp_table$valid <- snp_table$snp %in% who_markers
+
+# filter to just valid markers with at least 5 obs
+valid_snps <- snp_table %>% 
+  filter(valid == TRUE & count >= 5) %>% 
+  pull(snp) %>% 
+  as.character()
+snp_data <- snp_data %>% 
+  filter(snp_name %in% valid_snps)
+
+# coordinates for sample sites
+coords <- snp_data %>%
+  select(longitude,latitude) %>%
+  as.matrix()
+
+# extract out the design matrices (pre-scaled)
+# interpolate NAs just for extracting data
+treatment_EFT_no_na <- terra::focal(treatment_EFT,
+                                    w = 9,
+                                    fun = "modal",
+                                    na.policy = "only")
+
+plot(treatment_EFT_no_na)
+points(coords)
+
+# build covariate stack
+covariates <- c(treatment_EFT_no_na,PfPR)
+# note need to scale the covariate layer but keen the original scale version for visualisation too
+covariates <- scale(covariates)
+
+X_obs <- build_design_matrix(covariates = covariates, 
+                             coords,
+                             scale = FALSE)
+# check for NAs in pred values
+anyNA(X_obs)
+# define number of latents
+n_latent <- 8
+# define model parameters
+parameters <- define_greta_parameters(n_snp = n_snp,
+                                      n_latent = n_latent)
+
+# note we just use two betas (intercept + treatment EFT), because we do not want
+# to fit to the two covariates specification yet
+
+# define Gaussian process for latent factors over SNP and TF locations
+# matern 5/2 isotropic kernel
+kernel_lengthscale <- normal(14, 1, truncation = c(0, Inf))
+kernel_sd <- normal(0, 1, truncation = c(0, Inf))
+kernel <- mat52(lengthscales = c(kernel_lengthscale, kernel_lengthscale),
+                variance = kernel_sd ^ 2)
+
+# define knots for reduced-rank GP approximation
+kmn <- kmeans(coords, centers = 25)
+
+# define GPs over spatial latent factors, evaluated at all data locations
+latents_obs <- gp(x = coords,
+                  kernel = kernel,
+                  inducing = kmn$centers,
+                  n = n_latent)
+
+# # prior predictive check
+# gp_check(spatial_latents = latents_obs,
+#          target_raster = treatment_EFT_coarse)
+
+# combine these with parameters to get matrices SNP frequencies at the SNP data locations
+snp_freq_logit_obs <- X_obs %*% t(parameters$beta) +
+  t(parameters$loadings %*% t(latents_obs))
+snp_freq_obs <- ilogit(snp_freq_logit_obs)
+
+# define the likelihood over the SNPs
+snp_data <- snp_data %>% 
+  mutate(coord_id = row_number(),
+         snp_id = match(snp_name, snp_table$snp))
+
+snp_data_index <- cbind(snp_data$coord_id, snp_data$snp_id)
+
+
+# model overdispersion in the data via an overdispersion parameter rho. This
+# prior makes rho approximately uniform, but fairly nicely behaved
+# normal(0, 1.6) is similar to logit distribution; with hierarcichal prior, set
+# overall sd to: sqrt((1.6 ^ 2) - 1)
+logit_rho_mean <- normal(0, 1.3)
+logit_rho_sd <- normal(0, 1, truncation = c(0, Inf))
+logit_rho_raw <- normal(0, 1, dim = n_snp)
+logit_rho_snps <- logit_rho_mean + logit_rho_raw * logit_rho_sd
+rho_snps <- ilogit(logit_rho_snps)
+
+distribution(snp_data$snp_count) <- betabinomial_p_rho(N = snp_data$sample_size,
+                                                       p = snp_freq_obs[snp_data_index],
+                                                       rho = rho_snps[snp_data$snp_id])
+# fit the model
+m <- model(kernel_lengthscale, 
+           kernel_sd,
+           logit_rho_mean,
+           logit_rho_raw,
+           parameters$beta)
+draws <- mcmc(m, 
+              one_by_one = TRUE,
+              warmup = 2e3,
+              n_samples = 2e3)
+
+# check convergence is not too horrible
+r_hats <- coda::gelman.diag(draws,
+                            autoburnin = FALSE,
+                            multivariate = FALSE)
+summary(r_hats$psrf)
+
+
+# check overdispersion param in beta-binom
+rho_snps_posterior <- calculate(rho_snps[snp_table$valid == TRUE],
+                                nsim = 100, 
+                                values = draws)[[1]]
+
+rho_snps_posterior <- apply(rho_snps_posterior,2:3,mean)
+rho_snps_posterior
+
+# check loading
+loadings_posterior <- calculate(parameters$loadings[snp_table$valid == TRUE,],
+                                nsim = 100, 
+                                values = draws)[[1]]
+
+loadings_posterior <- apply(loadings_posterior,2:3,mean)
+loadings_posterior
+
+# check betas
+beta_posterior <- calculate(parameters$beta[snp_table$valid == TRUE,],
+                            nsim = 100, 
+                            values = draws)[[1]]
+
+beta_posterior <- apply(beta_posterior,2:3,mean)
+beta_posterior
+# some negative effects, a bit weird
+
+# check overall residual patterns
+pred_count <-  betabinomial_p_rho(N = snp_data$sample_size,
+                                  p = snp_freq_obs[snp_data_index],
+                                  rho = rho_snps[snp_data$snp_id])
+pred_count <- calculate(pred_count,
+                        nsim = 100, 
+                        values = draws)
+overall_residual <- qq_residual_diag(pred_count,
+                                     snp_data$snp_count,
+                                     title = "across snp",plot_only = FALSE)
+
+plot(overall_residual)
+residual_pts <- data.frame(value = overall_residual$scaledResiduals,
+                           x = snp_data$longitude,
+                           y = snp_data$latitude)
+
+lm(value ~ x:y, data = residual_pts) %>% summary
+residual_sf <- st_as_sf(residual_pts %>% 
+                          mutate(across(x:y, \(x) jitter(x, factor = 20))), 
+                        coords = c("x","y"), 
+                        crs = crs(treatment_EFT_coarse))
+plot(residual_sf)
+# no spatial relationship in overall residual pattern
+
+# check residual for each snp
+for (i in snp_table$id[snp_table$valid == TRUE]) {
+  
+  if (snp_table$count[i] < 3) {
+    cat("skip, too few obs \n")
+  } else {
+    this_snp_data_index <- snp_data_index[snp_data_index[,2] == i,]
+    pred_count_snp <- betabinomial_p_rho(N = snp_data$sample_size[this_snp_data_index[,1]],
+                                         p = snp_freq_obs[this_snp_data_index],
+                                         rho = rho_snps[this_snp_data_index[,2]])
+    # binomial(snp_data$sample_size[this_snp_data_index[,1]],
+    #                          snp_freq_obs[this_snp_data_index])
+    pred_count_snp <- calculate(pred_count_snp,
+                                nsim = 100, 
+                                values = draws)
+    
+    png(paste0("figures/",snp_table$snp[i],"_residual_diag.png"),width = 800, height = 400)
+    qq_residual_diag(pred_count_snp,
+                     snp_data$snp_count[this_snp_data_index[,1]],
+                     title = snp_table$snp[i])
+    dev.off()
+  }
+}
+
+
+# posterior predictive check
+gp_check(spatial_latents = latents_obs,
+         target_raster = treatment_EFT_coarse,
+         posterior_sims = draws)
+# mean and var patterns look a bit odd, but maybe I'm more visually used to
+# smooth rbf results
+
+# make posterior prediction maps
+# remember to sample coords from treatment layer cause it's got more holes in it
+coords_pixel <- terra::xyFromCell(treatment_EFT_coarse,
+                                  cell = terra::cells(treatment_EFT_coarse))
+
+# get latent factors and design matrix
+latents_pixel <- greta.gp::project(latents_obs, coords_pixel)
+X_pixel <- build_design_matrix(covariates, coords_pixel)
+anyNA(X_pixel)
+# predict SNP frequencies
+snp_freq_logit_pixel <- X_pixel %*% t(parameters$beta) +
+  t(parameters$loadings %*% t(latents_pixel))
+snp_freq_pixel <- ilogit(snp_freq_logit_pixel)
+
+# # compute posterior samples of SNPs
+post_pixel_sims <- calculate(snp_freq_pixel,
+                             values = draws,
+                             nsim = 1e3)
+
+snp_freq_post_mean_pixel <- apply(post_pixel_sims$snp_freq_pixel,2:3,mean)
+snp_freq_post_sd_pixel <- apply(post_pixel_sims$snp_freq_pixel,2:3,sd)
+snp_freq_post_mean <- treatment_EFT_coarse * 0
+snp_freq_post_sd <- treatment_EFT_coarse * 0
+
+for (i in snp_table$id[snp_table$valid == TRUE]) {
+  
+ snp_freq_post_mean[terra::cells(snp_freq_post_mean)] <- snp_freq_post_mean_pixel[,i]
+  snp_freq_post_sd[terra::cells(snp_freq_post_sd)] <- snp_freq_post_sd_pixel[,i]
+  snp_stack <- c(snp_freq_post_mean,snp_freq_post_sd)
+  names(snp_stack) <- c("mean","std. dev.")
+ 
+  plot_dat <- snp_data %>% 
+    filter(snp_id == i) %>% 
+    mutate(prevalence = snp_count/sample_size) %>% 
+    mutate(prediction = terra::extract(snp_freq_post_mean,data.frame(longitude,latitude), ID = FALSE, raw = TRUE),
+           residual = abs(prevalence-prediction))
+ 
+  plot_dat <- plot_dat %>% 
+    mutate(across(longitude:latitude, \(x) jitter(x, factor = 10))) 
+  
+  ggplot() +
+    geom_spatraster(
+      data = snp_stack
+    ) +
+    facet_wrap(~lyr, nrow = 1, ncol = 2) +
+    scale_fill_gradientn(
+      #labels = scales::percent,
+      name = "map value",
+      limits = c(0, 1),
+      na.value = "transparent",
+      colours = rev(idpalette("idem", 100)))  +
+    ggtitle(
+      label = snp_table$snp[i],
+      subtitle = "prevalence in artemisinin resistance marker data"
+    ) +
+    theme_snp_maps() + 
+    geom_point(aes(x = longitude, 
+                   y = latitude, 
+                   col = prevalence), 
+               data = plot_dat,
+               #col = "white",
+               shape = "+", 
+               inherit.aes = TRUE,
+               size = 3) + 
+    scale_color_gradientn(name = "observed prevalence",
+                          limits = c(0, 1),
+                          na.value = "transparent",
+                          colours = alpha(rev(idpalette("iddu", 100)[70:100]),0.6))
+  
+  ggsave(paste0("figures/",snp_table$snp[i],"_pred.png"),width = 8, height = 4.5, units = "in")
+}
+
