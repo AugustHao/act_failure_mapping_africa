@@ -10,7 +10,7 @@
 #' @return
 #' @author Nick Golding
 #' @export
-build_design_matrix <- function(covariates, coords = NULL, scale = TRUE) {
+build_design_matrix <- function(covariates, coords = NULL, scale = FALSE) {
 
   # optionally scale covariates
   if (scale) {
