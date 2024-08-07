@@ -1,10 +1,13 @@
 . <- lapply(list.files("R", full.names = TRUE), source)
 set.seed(2024-04-26)
 
+# load in MAP data layers
 PfPR <- make_5_yr_mean_rast(name = "PfPR")
 Pf_incidence <- make_5_yr_mean_rast(name = "Pf_IncidenceRate")
 treatment_EFT <- make_5_yr_mean_rast(name = "treatment_EFT",
                                      remove_every_second_layer = FALSE)
+pop <- make_5_yr_mean_rast(name = "pop",
+                           remove_every_second_layer = FALSE)
 
 # lapply(c(PfPR,Pf_incidence,treatment_EFT), FUN =  plot)
 
@@ -74,13 +77,123 @@ coords <- snp_data %>%
   select(longitude,latitude) %>%
   as.matrix()
 
+# plot raw rasters and data for vis
+ggplot() +
+  geom_spatraster(
+    data = PfPR
+  ) +
+  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+  scale_fill_gradientn(
+    #labels = scales::percent,
+    # name = "value",
+    limits = c(0, 1),
+    na.value = "transparent",
+    colours = rev(idpalette("iddu", 100)))  +
+  ggtitle(
+    label = "Plasmodium falciparum Parasite Rate (PfPR)",
+    subtitle = "Proportion of Children 2 to 10 years of age showing, on a given year, detectable Plasmodium falciparum parasite 2017-2022"
+  ) +
+  theme_snp_maps() + 
+  geom_point(aes(x = longitude, 
+                 y = latitude), 
+             data = snp_data,
+             #col = "white",
+             shape = "+", 
+             inherit.aes = TRUE,
+             size = 1) 
+
+ggsave(paste0("figures/PfPR_vis.png"),width = 10, height = 6, units = "in")
+
+ggplot() +
+  geom_spatraster(
+    data = Pf_incidence
+  ) +
+  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+  scale_fill_gradientn(
+    #labels = scales::percent,
+    # name = "value",
+    limits = c(0, 0.7),
+    na.value = "transparent",
+    colours = colorRampPalette(c("#B9DDF1FF","#2A5783FF"))(100)
+    # note to self check if can get MAP official colours
+      )  +
+  ggtitle(
+    label = "Plasmodium falciparum Incidence Rate",
+    subtitle = "Number of newly diagnosed Plasmodium falciparum cases per 1,000 population, on a given year 2017-2022"
+  ) +
+  theme_snp_maps() + 
+  geom_point(aes(x = longitude, 
+                 y = latitude), 
+             data = snp_data,
+             #col = "white",
+             shape = "+", 
+             inherit.aes = TRUE,
+             size = 1) 
+
+ggsave(paste0("figures/Pf_incidence_vis.png"),width = 10, height = 6, units = "in")
+
+ggplot() +
+  geom_spatraster(
+    data = treatment_EFT
+  ) +
+  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+  scale_fill_gradientn(
+    #labels = scales::percent,
+    # name = "value",
+    #limits = c(0, 1),
+    na.value = "transparent",
+    colours = colorRampPalette(c("#FFC685FF","#9E3D22FF"))(100)
+    )  +
+  ggtitle(
+    label = "Effective Treatment (EFT)",
+    subtitle = "Proportion of Malaria Cases receiving Effective Treatment with an Antimalarial Medicine 2017-2022"
+  ) +
+  theme_snp_maps() + 
+  geom_point(aes(x = longitude, 
+                 y = latitude), 
+             data = snp_data,
+             #col = "white",
+             shape = "+", 
+             inherit.aes = TRUE,
+             size = 1) 
+
+ggsave(paste0("figures/treatment_vis.png"),width = 10, height = 6, units = "in")
+
+ggplot() +
+  geom_spatraster(
+    data = terra::aggregate(pop,20,fun = "sum", na.rm = TRUE)/1e6
+  ) +
+  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+  scale_fill_gradientn(
+    #labels = scales::percent,
+    # name = "value",
+    #limits = c(0, 1),
+    na.value = "transparent",
+    colours = colorRampPalette(c("#B3E0A6FF","#24693DFF"))(100)
+  )  +
+  ggtitle(
+    label = "Human population density",
+    subtitle = "population count (in millions) on a 100km grid averaged over 2017-2020"
+  ) +
+  theme_snp_maps() + 
+  geom_point(aes(x = longitude, 
+                 y = latitude), 
+             data = snp_data,
+             #col = "white",
+             shape = "+", 
+             inherit.aes = TRUE,
+             size = 1) 
+
+ggsave(paste0("figures/pop_vis.png"),width = 10, height = 6, units = "in")
+
 # extract out the design matrices (pre-scaled)
-# interpolate NAs just for extracting data
+
+# interpolate NAs in EFT layer just for extracting data
 treatment_EFT_no_na <- terra::focal(treatment_EFT,
                                     w = 9,
                                     fun = "modal",
                                     na.policy = "only")
-
+names(treatment_EFT_no_na) <- "treatment_EFT"
 plot(treatment_EFT_no_na)
 points(coords)
 
@@ -95,7 +208,7 @@ X_obs <- build_design_matrix(covariates = covariates,
 # check for NAs in pred values
 anyNA(X_obs)
 # define number of latents
-n_latent <- 8
+n_latent <- 4
 # define model parameters
 parameters <- define_greta_parameters(n_snp = n_snp,
                                       n_latent = n_latent)
@@ -105,7 +218,7 @@ parameters <- define_greta_parameters(n_snp = n_snp,
 
 # define Gaussian process for latent factors over SNP and TF locations
 # matern 5/2 isotropic kernel
-kernel_lengthscale <- normal(14, 1, truncation = c(0, Inf))
+kernel_lengthscale <- normal(5, 1, truncation = c(0, Inf))
 kernel_sd <- normal(0, 1, truncation = c(0, Inf))
 kernel <- mat52(lengthscales = c(kernel_lengthscale, kernel_lengthscale),
                 variance = kernel_sd ^ 2)
@@ -180,17 +293,58 @@ loadings_posterior <- calculate(parameters$loadings[snp_table$valid == TRUE,],
                                 nsim = 100, 
                                 values = draws)[[1]]
 
-loadings_posterior <- apply(loadings_posterior,2:3,mean)
-loadings_posterior
+png("figures/loadings_posterior.png",width = 600, height = 800)
+loadings_plot(loadings_posterior,
+              snp_names = valid_snps)
+dev.off()
+# 
+# loadings_posterior <- apply(loadings_posterior,2:3,mean)
+# loadings_posterior
 
 # check betas
 beta_posterior <- calculate(parameters$beta[snp_table$valid == TRUE,],
                             nsim = 100, 
                             values = draws)[[1]]
 
-beta_posterior <- apply(beta_posterior,2:3,mean)
-beta_posterior
+# beta_posterior <- apply(beta_posterior,2:3,mean)
+# beta_posterior
 # some negative effects, a bit weird
+X_tib <- as.tibble(X_obs)
+colnames(X_tib)[2] <- "treatment_EFT"
+covars_names <- colnames(X_tib)[-1]
+# covars_names <- c(covars_names,"landuse")
+response_data <- cbind(snp_data,X_tib)
+
+# make a prev out of 100 for plotting
+response_data$prev_100 <- response_data$snp_count/response_data$sample_size * 100
+# check residual for each snp
+for (i in snp_table$id[snp_table$valid == TRUE]) {
+  
+  this_snp_data_index <- snp_data_index[snp_data_index[,2] == i,]
+  response_data_this <- response_data[this_snp_data_index[,1],]
+  
+  for (j in 1:length(covars_names)) {
+    p <- marginal_response_plot(covars_names[j],
+                                covariates = X_tib,
+                                snp_idx = i,
+                                transformations = NULL,
+                                draws = draws,
+                                response_data = response_data_this,
+                                response = "prev_100")
+    ggsave(paste0("figures/",
+                  snp_table$snp[i],
+                  "_to_",
+                  covars_names[j],
+                  "_marginal_response.png"),
+           width = 10, 
+           height = 5, 
+           units = "in",
+           plot = p)
+  }
+
+}
+
+
 
 # check overall residual patterns
 pred_count <-  betabinomial_p_rho(N = snp_data$sample_size,
@@ -317,6 +471,6 @@ for (i in snp_table$id[snp_table$valid == TRUE]) {
                           na.value = "transparent",
                           colours = alpha(rev(idpalette("iddu", 100)[70:100]),0.6))
   
-  ggsave(paste0("figures/",snp_table$snp[i],"_pred.png"),width = 8, height = 4.5, units = "in")
+  ggsave(paste0("figures/",snp_table$snp[i],"_pred.png"),width = 10, height = 6, units = "in")
 }
 
