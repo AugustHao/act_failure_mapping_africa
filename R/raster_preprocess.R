@@ -1,16 +1,18 @@
 
-#' for a folder of MAP rasters, calculate the mean across years, and crop to africa
+#' for a folder of MAP rasters, calculate the mean across years, and crop to
+#' africa
 #'
 #' @param filepath where the raster files live
-#' @param remove_every_second_layer if every second layer is to be removed
+#' @param remove_every_second_layer if every second layer is to be removed, to
+#'   deal with some quirks in MAP layers
 #'
 #' @return a single layer raster file
 #' @export
 #'
 #' @examples
-make_5_yr_mean_rast <- function(filepath = "data/rasters/", 
-                                name,
-                                remove_every_second_layer = TRUE) {
+make_synoptic_mean_rast <- function(filepath = "data/rasters/", 
+                                    name,
+                                    remove_every_second_layer = TRUE) {
   
   r_stack <- terra::rast(list.files(paste0(filepath,name,"/"),full.names = TRUE))
   africa <- terra::rast("data/rasters/africa_mask.tif")

@@ -1,4 +1,4 @@
-loadings_plot <- function(loadings_posterior,
+loadings_plot <- function(loadings_sample,
                           snp_names) {
 
 
@@ -31,16 +31,16 @@ loadings_plot <- function(loadings_posterior,
   
   colnames(ci_mean) <- paste0("latent_", seq_len(ncol(ci_mean)))
   rownames(ci_mean) <- snp_names
-  corrplot(ci_mean,
-           mar = c(0, 0, 2, 0),
-           title = "mean SNP to spatial latent factor loading posterior",
-           is.corr = FALSE,
-           method="color",
-           #col = idpalette::idem(100),
-           tl.col="black", 
-           tl.srt=45,
-           cl.length = 10,
-           cl.align.text = 'l')
+  corrplot::corrplot(ci_mean,
+                     mar = c(0, 0, 2, 0),
+                     title = "mean SNP to spatial latent factor loading",
+                     is.corr = FALSE,
+                     method="color",
+                     #col = idpalette::idem(100),
+                     tl.col="black", 
+                     tl.srt=45,
+                     cl.length = 10,
+                     cl.align.text = 'l')
 
   }
 
