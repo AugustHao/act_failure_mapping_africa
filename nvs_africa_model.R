@@ -2,12 +2,12 @@
 set.seed(2024-04-26)
 
 # load in MAP data layers
-PfPR <- make_5_yr_mean_rast(name = "PfPR")
-Pf_incidence <- make_5_yr_mean_rast(name = "Pf_IncidenceRate")
-treatment_EFT <- make_5_yr_mean_rast(name = "treatment_EFT",
-                                     remove_every_second_layer = FALSE)
-pop <- make_5_yr_mean_rast(name = "pop",
-                           remove_every_second_layer = FALSE)
+PfPR <- make_synoptic_mean_rast(name = "PfPR")
+Pf_incidence <- make_synoptic_mean_rast(name = "Pf_IncidenceRate")
+treatment_EFT <- make_synoptic_mean_rast(name = "treatment_EFT",
+                                         remove_every_second_layer = FALSE)
+pop <- make_synoptic_mean_rast(name = "pop",
+                               remove_every_second_layer = FALSE)
 
 # lapply(c(PfPR,Pf_incidence,treatment_EFT), FUN =  plot)
 
@@ -19,23 +19,18 @@ treatment_EFT_coarse <- terra::aggregate(treatment_EFT,
                                          )
 plot(treatment_EFT_coarse)
 
-# # coarsened version of PfPR for prediction
-# PfPR_coarse <- terra::aggregate(PfPR,
-#                                 10,
-#                                 fun="mean"
-# )
-# plot(PfPR_coarse)
 # load marker prevalence data
 snp_data <- readr::read_csv("data/nvs_africa.csv")
 
 # filter to specific coordinates and select just the last 5 years
-year_range <- 5
+year_range <- 6
 year_cutoff <- (snp_data %>% pull(year_start) %>% max) - year_range
 snp_data <- snp_data %>% 
   filter(
     site_type != "Country", 
     year_start > year_cutoff)
 
+# make table of unique snps
 snp_table <- table(snp_data$snp_name) %>% 
   sort(decreasing = TRUE) %>% 
   as.data.frame() %>% 
@@ -64,7 +59,7 @@ who_markers <- c("F446I",
 
 snp_table$valid <- snp_table$snp %in% who_markers
 
-# filter to just valid markers with at least 5 obs
+# filter data to just valid markers with at least 5 obs
 valid_snps <- snp_table %>% 
   filter(valid == TRUE & count >= 5) %>% 
   pull(snp) %>% 
@@ -77,128 +72,137 @@ coords <- snp_data %>%
   select(longitude,latitude) %>%
   as.matrix()
 
-# plot raw rasters and data for vis
-ggplot() +
-  geom_spatraster(
-    data = PfPR
-  ) +
-  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
-  scale_fill_gradientn(
-    #labels = scales::percent,
-    # name = "value",
-    limits = c(0, 1),
-    na.value = "transparent",
-    colours = rev(idpalette("iddu", 100)))  +
-  ggtitle(
-    label = "Plasmodium falciparum Parasite Rate (PfPR)",
-    subtitle = "Proportion of Children 2 to 10 years of age showing, on a given year, detectable Plasmodium falciparum parasite 2017-2022"
-  ) +
-  theme_snp_maps() + 
-  geom_point(aes(x = longitude, 
-                 y = latitude), 
-             data = snp_data,
-             #col = "white",
-             shape = "+", 
-             inherit.aes = TRUE,
-             size = 1) 
-
-ggsave(paste0("figures/PfPR_vis.png"),width = 10, height = 6, units = "in")
-
-ggplot() +
-  geom_spatraster(
-    data = Pf_incidence
-  ) +
-  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
-  scale_fill_gradientn(
-    #labels = scales::percent,
-    # name = "value",
-    limits = c(0, 0.7),
-    na.value = "transparent",
-    colours = colorRampPalette(c("#B9DDF1FF","#2A5783FF"))(100)
-    # note to self check if can get MAP official colours
-      )  +
-  ggtitle(
-    label = "Plasmodium falciparum Incidence Rate",
-    subtitle = "Number of newly diagnosed Plasmodium falciparum cases per 1,000 population, on a given year 2017-2022"
-  ) +
-  theme_snp_maps() + 
-  geom_point(aes(x = longitude, 
-                 y = latitude), 
-             data = snp_data,
-             #col = "white",
-             shape = "+", 
-             inherit.aes = TRUE,
-             size = 1) 
-
-ggsave(paste0("figures/Pf_incidence_vis.png"),width = 10, height = 6, units = "in")
-
-ggplot() +
-  geom_spatraster(
-    data = treatment_EFT
-  ) +
-  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
-  scale_fill_gradientn(
-    #labels = scales::percent,
-    # name = "value",
-    #limits = c(0, 1),
-    na.value = "transparent",
-    colours = colorRampPalette(c("#FFC685FF","#9E3D22FF"))(100)
-    )  +
-  ggtitle(
-    label = "Effective Treatment (EFT)",
-    subtitle = "Proportion of Malaria Cases receiving Effective Treatment with an Antimalarial Medicine 2017-2022"
-  ) +
-  theme_snp_maps() + 
-  geom_point(aes(x = longitude, 
-                 y = latitude), 
-             data = snp_data,
-             #col = "white",
-             shape = "+", 
-             inherit.aes = TRUE,
-             size = 1) 
-
-ggsave(paste0("figures/treatment_vis.png"),width = 10, height = 6, units = "in")
-
-ggplot() +
-  geom_spatraster(
-    data = terra::aggregate(pop,20,fun = "sum", na.rm = TRUE)/1e6
-  ) +
-  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
-  scale_fill_gradientn(
-    #labels = scales::percent,
-    # name = "value",
-    #limits = c(0, 1),
-    na.value = "transparent",
-    colours = colorRampPalette(c("#B3E0A6FF","#24693DFF"))(100)
-  )  +
-  ggtitle(
-    label = "Human population density",
-    subtitle = "population count (in millions) on a 100km grid averaged over 2017-2020"
-  ) +
-  theme_snp_maps() + 
-  geom_point(aes(x = longitude, 
-                 y = latitude), 
-             data = snp_data,
-             #col = "white",
-             shape = "+", 
-             inherit.aes = TRUE,
-             size = 1) 
-
-ggsave(paste0("figures/pop_vis.png"),width = 10, height = 6, units = "in")
+# # plot raw rasters and data for vis
+# ggplot() +
+#   geom_spatraster(
+#     data = PfPR
+#   ) +
+#   #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+#   scale_fill_gradientn(
+#     #labels = scales::percent,
+#     # name = "value",
+#     limits = c(0, 1),
+#     na.value = "transparent",
+#     colours = rev(idpalette("iddu", 100)))  +
+#   ggtitle(
+#     label = "Plasmodium falciparum Parasite Rate (PfPR)",
+#     subtitle = "Proportion of Children 2 to 10 years of age showing, on a given year, detectable Plasmodium falciparum parasite 2017-2022"
+#   ) +
+#   theme_snp_maps() + 
+#   geom_point(aes(x = longitude, 
+#                  y = latitude), 
+#              data = snp_data,
+#              #col = "white",
+#              shape = "+", 
+#              inherit.aes = TRUE,
+#              size = 1) 
+# 
+# ggsave(paste0("figures/PfPR_vis.png"),width = 10, height = 6, units = "in")
+# 
+# ggplot() +
+#   geom_spatraster(
+#     data = Pf_incidence
+#   ) +
+#   #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+#   scale_fill_gradientn(
+#     #labels = scales::percent,
+#     # name = "value",
+#     limits = c(0, 0.7),
+#     na.value = "transparent",
+#     colours = colorRampPalette(c("#B9DDF1FF","#2A5783FF"))(100)
+#     # note to self check if can get MAP official colours
+#       )  +
+#   ggtitle(
+#     label = "Plasmodium falciparum Incidence Rate",
+#     subtitle = "Number of newly diagnosed Plasmodium falciparum cases per 1,000 population, on a given year 2017-2022"
+#   ) +
+#   theme_snp_maps() + 
+#   geom_point(aes(x = longitude, 
+#                  y = latitude), 
+#              data = snp_data,
+#              #col = "white",
+#              shape = "+", 
+#              inherit.aes = TRUE,
+#              size = 1) 
+# 
+# ggsave(paste0("figures/Pf_incidence_vis.png"),width = 10, height = 6, units = "in")
+# 
+# ggplot() +
+#   geom_spatraster(
+#     data = treatment_EFT
+#   ) +
+#   #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+#   scale_fill_gradientn(
+#     #labels = scales::percent,
+#     # name = "value",
+#     #limits = c(0, 1),
+#     na.value = "transparent",
+#     colours = colorRampPalette(c("#FFC685FF","#9E3D22FF"))(100)
+#     )  +
+#   ggtitle(
+#     label = "Effective Treatment (EFT)",
+#     subtitle = "Proportion of Malaria Cases receiving Effective Treatment with an Antimalarial Medicine 2017-2022"
+#   ) +
+#   theme_snp_maps() + 
+#   geom_point(aes(x = longitude, 
+#                  y = latitude), 
+#              data = snp_data,
+#              #col = "white",
+#              shape = "+", 
+#              inherit.aes = TRUE,
+#              size = 1) 
+# 
+# ggsave(paste0("figures/treatment_vis.png"),width = 10, height = 6, units = "in")
+# 
+# ggplot() +
+#   geom_spatraster(
+#     data = terra::aggregate(pop,20,fun = "sum", na.rm = TRUE)/1e6
+#   ) +
+#   #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+#   scale_fill_gradientn(
+#     #labels = scales::percent,
+#     # name = "value",
+#     #limits = c(0, 1),
+#     na.value = "transparent",
+#     colours = colorRampPalette(c("#B3E0A6FF","#24693DFF"))(100)
+#   )  +
+#   ggtitle(
+#     label = "Human population density",
+#     subtitle = "population count (in millions) on a 100km grid averaged over 2017-2020"
+#   ) +
+#   theme_snp_maps() + 
+#   geom_point(aes(x = longitude, 
+#                  y = latitude), 
+#              data = snp_data,
+#              #col = "white",
+#              shape = "+", 
+#              inherit.aes = TRUE,
+#              size = 1) 
+# 
+# ggsave(paste0("figures/pop_vis.png"),width = 10, height = 6, units = "in")
 
 # extract out the design matrices (pre-scaled)
 
 # interpolate NAs in EFT layer just for extracting data
 treatment_EFT_no_na <- terra::focal(treatment_EFT,
-                                    w = 9,
+                                    w = 21,
                                     fun = "modal",
                                     na.policy = "only")
 names(treatment_EFT_no_na) <- "treatment_EFT"
 plot(treatment_EFT_no_na)
 points(coords)
 
+# interpolate NAs in PfPR layer just for extracting data
+PfPR_no_na <- terra::focal(PfPR,
+                           w = 3,
+                           fun = "mean",
+                           na.policy = "only")
+names(PfPR_no_na) <- "PfPR"
+plot(PfPR_no_na)
+points(coords)
+
 # build covariate stack
-covariates <- c(treatment_EFT_no_na,PfPR)
+covariates <- c(treatment_EFT_no_na,PfPR_no_na)
 # note need to scale the covariate layer but keen the original scale version for visualisation too
 covariates <- scale(covariates)
 
@@ -208,7 +212,7 @@ X_obs <- build_design_matrix(covariates = covariates,
 # check for NAs in pred values
 anyNA(X_obs)
 # define number of latents
-n_latent <- 4
+n_latent <- 2
 # define model parameters
 parameters <- define_greta_parameters(n_snp = n_snp,
                                       n_latent = n_latent)
@@ -396,9 +400,12 @@ for (i in snp_table$id[snp_table$valid == TRUE]) {
 
 
 # posterior predictive check
+png(paste0("figures/latent_group_realisation.png"),width = 800, height = 400)
 gp_check(spatial_latents = latents_obs,
          target_raster = treatment_EFT_coarse,
          posterior_sims = draws)
+dev.off()
+
 # mean and var patterns look a bit odd, but maybe I'm more visually used to
 # smooth rbf results
 
