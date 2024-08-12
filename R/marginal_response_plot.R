@@ -15,6 +15,7 @@ marginal_response_plot <- function(target_covariate,
                                    transformations = NULL,
                                    draws = draws,
                                    response_data = NULL,
+                                   response_is_rug = FALSE,
                                    response = "snp_count",
                                    discrete_covariate = FALSE) { 
   # marginal response plots
@@ -87,14 +88,27 @@ marginal_response_plot <- function(target_covariate,
       select(c(response,target_covariate)) %>% 
       rename(x = target_covariate,
              y= response)
-    p <- p + 
-      geom_point(aes(x = x, 
-                     y = y), 
+    
+    if (!response_is_rug) {
+      p <- p + 
+        geom_point(aes(x = x, 
+                       y = y), 
+                   data = response_data,
+                   col = alpha(idpalette::iddu(5)[4],0.4),
+                   shape = "+", 
+                   inherit.aes = FALSE,
+                   size = 5) 
+    } else {
+      p <- p + 
+        geom_rug(aes(x = x, 
+                     y = 1), 
                  data = response_data,
-                 col = alpha(idpalette::iddu(5)[4],0.4),
-                 shape = "+", 
+                 col = alpha(idpalette::iddu(5)[4],0.3),
                  inherit.aes = FALSE,
-                 size = 3) 
+                 size = 1,
+                 sides="b") 
+    }
+
     
   }
   # base plot code for debug purpose
