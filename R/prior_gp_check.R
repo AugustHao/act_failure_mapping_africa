@@ -1,6 +1,7 @@
 gp_check <- function(spatial_latents,
                      target_raster,
-                     posterior_sims = NULL) {
+                     posterior_sims = NULL,
+                     plot_var = FALSE) {
   
   coords_pixel <- terra::xyFromCell(target_raster,
                                     cell = terra::cells(target_raster))
@@ -22,11 +23,19 @@ gp_check <- function(spatial_latents,
   
   n_latents <- ncol(spatial_latents)
   
-  par(mfcol = c(2,n_latents))
-  for (i in seq_len(n_latents)) {
-    post_mean_rast[terra::cells(post_mean_rast)] <- post_mean_pixel[,i]
-    plot(post_mean_rast, main = paste0("latent group mean ",i))
-    post_var_rast[terra::cells(post_var_rast)] <- post_var_pixel[,i]
-    plot(post_var_rast, main = paste0("latent group variance ",i))
+  if (plot_var) {
+    par(mfcol = c(2,n_latents))
+    for (i in seq_len(n_latents)) {
+      post_mean_rast[terra::cells(post_mean_rast)] <- post_mean_pixel[,i]
+      plot(post_mean_rast, main = paste0("latent group mean ",i))
+      post_var_rast[terra::cells(post_var_rast)] <- post_var_pixel[,i]
+      plot(post_var_rast, main = paste0("latent group variance ",i))
+    }
+  } else {
+    par(mfcol = c(1,n_latents))
+    for (i in seq_len(n_latents)) {
+      post_mean_rast[terra::cells(post_mean_rast)] <- post_mean_pixel[,i]
+      plot(post_mean_rast, main = paste0("latent group mean ",i))
+    }
   }
 }
