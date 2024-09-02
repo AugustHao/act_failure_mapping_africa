@@ -39,23 +39,7 @@ snp_table <- table(snp_data$snp_name) %>%
   mutate(id = row_number())
 # note we count all SNPs in n_snp, even those not modelled, to keep the id consistent
 n_snp <- n_distinct(snp_table$snp)
-# markers validated by WHO:
-# https://www.who.int/news-room/questions-and-answers/item/artemisinin-resistance
-# note some of these have associated markers, so future job is to code up marker
-# by association matrix
-who_markers <- c("F446I",
-                 "N458Y",
-                 "C469Y",
-                 "M476I",
-                 "Y493H",
-                 "R539T",
-                 "I543T",
-                 "P553L",
-                 "R561H",
-                 "P574L",
-                 "C580Y",
-                 "R622I",
-                 "A675V")
+
 
 snp_table$valid <- snp_table$snp %in% who_markers
 

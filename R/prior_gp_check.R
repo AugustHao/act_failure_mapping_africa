@@ -23,6 +23,8 @@ gp_check <- function(spatial_latents,
   
   n_latents <- ncol(spatial_latents)
   
+  png("figures/gp_prior_check.png",width = 250 * n_latents, height = 300)
+  
   if (plot_var) {
     par(mfcol = c(2,n_latents))
     for (i in seq_len(n_latents)) {
@@ -38,4 +40,5 @@ gp_check <- function(spatial_latents,
       plot(post_mean_rast, main = paste0("latent group mean ",i))
     }
   }
+  dev.off()
 }

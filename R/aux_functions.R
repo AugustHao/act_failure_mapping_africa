@@ -89,3 +89,53 @@ build_covariate_stack <- function(treatment_EFT_rast, PfPR_rast) {
   covariates <- scale(covariates)
   covariates
 }
+
+get_CV_blocks <- function(snp_data,covariate_rast) {
+  # turn data into sf for blockCV
+  snp_data_sf <- st_as_sf(snp_data,
+                          coords = c("longitude","latitude"),
+                          crs = crs(covariate_rast))
+  # get cv blocks
+  cv_blocks <- blockCV::cv_spatial(snp_data_sf,
+                                   r = covariate_rast,
+                                   k = 5)
+  cv_blocks
+}
+
+# # hierarchical rho prior for beta binom distribution
+# rho_prior <- function(n_snp) { 
+#   # model overdispersion in the data via an overdispersion parameter rho. This
+#   # prior makes rho approximately uniform, but fairly nicely behaved
+#   # normal(0, 1.6) is similar to logit distribution; with hierarcichal prior, set
+#   # overall sd to: sqrt((1.6 ^ 2) - 1)
+#   logit_rho_mean <- normal(0, 1.3)
+#   logit_rho_sd <- normal(0, 1, truncation = c(0, Inf))
+#   logit_rho_raw <- normal(0, 1, dim = n_snp)
+#   logit_rho_snps <- logit_rho_mean + logit_rho_raw * logit_rho_sd
+#   rho_snps <- ilogit(logit_rho_snps)
+#   
+#   rho_snps
+# }
+
+# # spatial gp prior
+# gp_objs <- function(coords, n_latent) {
+#   # define Gaussian process for latent factors over SNP locations
+#   # matern 5/2 isotropic kernel
+#   kernel_lengthscale <- normal(5, 1, truncation = c(0, Inf))
+#   kernel_sd <- normal(0, 1, truncation = c(0, Inf))
+#   kernel <- mat52(lengthscales = c(kernel_lengthscale, kernel_lengthscale),
+#                   variance = kernel_sd ^ 2)
+#   
+#   # define knots for reduced-rank GP approximation
+#   kmn <- kmeans(coords, centers = 50)
+#   
+#   # define GPs over spatial latent factors, evaluated at all data locations
+#   latents_obs <- gp(x = coords,
+#                     kernel = kernel,
+#                     inducing = kmn$centers,
+#                     n = n_latent)
+#   
+#   list(k_l = kernel_lengthscale,
+#        k_sd = kernel_sd,
+#        latents_obs = latents_obs)
+# }
