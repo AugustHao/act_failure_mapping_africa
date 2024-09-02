@@ -1,6 +1,11 @@
+default_colours <- function(){rev(idpalette("iddu", 100))}
+
 plot_synoptic_rast <- function(raster,
-                               name = NULL,
-                               desc = NULL,
+                               plot_name = NULL,
+                               plot_desc = NULL,
+                               colours = default_colours(),
+                               scale_name = waiver(),
+                               limits = NULL,
                                overlay_sites = FALSE,
                                site_data = NULL,
                                write_to_disk = TRUE,
@@ -10,17 +15,15 @@ plot_synoptic_rast <- function(raster,
   p <- ggplot() +
     geom_spatraster(
       data = raster
-    ) +
-    #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+    ) + 
     scale_fill_gradientn(
-      #labels = scales::percent,
-      # name = "value",
-      limits = c(0, 1),
+      limits = limits,
+      name = scale_name,
       na.value = "transparent",
-      colours = rev(idpalette("iddu", 100)))  +
+      colours = colours)  +
     ggtitle(
-      label = name,
-      subtitle = desc
+      label = plot_name,
+      subtitle = plot_desc
     ) +
     theme_snp_maps() 
   
@@ -28,11 +31,10 @@ plot_synoptic_rast <- function(raster,
     p <- p + 
       geom_point(aes(x = longitude, 
                      y = latitude), 
-                 data = snp_data,
-                 #col = "white",
+                 data = site_data,
                  shape = "+", 
                  inherit.aes = TRUE,
-                 size = 1) 
+                 size = 2) 
   }
 
   if (write_to_disk) {

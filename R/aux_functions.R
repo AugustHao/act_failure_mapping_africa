@@ -35,3 +35,57 @@ betabinomial_p_rho <- function(N, p, rho) {
   beta_binomial(size = N, alpha = a, beta = b)
   
 }
+
+# markers validated by WHO:
+# https://www.who.int/news-room/questions-and-answers/item/artemisinin-resistance
+# note some of these have associated markers, so future job is to code up marker
+# by association matrix
+who_markers <- function(){
+  c("F446I",
+    "N458Y",
+    "C469Y",
+    "M476I",
+    "Y493H",
+    "R539T",
+    "I543T",
+    "P553L",
+    "R561H",
+    "P574L",
+    "C580Y",
+    "R622I",
+    "A675V")
+}
+
+# filter snp data to exclude country level coordinates, those too old and those
+# outside the valid snp table
+filter_snp_data <- function(snp_data, year_range = 6, valid_snps) {
+  year_cutoff <- (snp_data %>% pull(year_start) %>% max) - year_range
+  snp_data %>% 
+    filter(
+      site_type != "Country", 
+      year_start > year_cutoff,
+      snp_name %in% valid_snps) 
+}
+
+# build covariate stack, with interpolation over NA and scaling
+build_covariate_stack <- function(treatment_EFT_rast, PfPR_rast) {
+  # interpolate NAs in EFT layer just for extracting data
+  treatment_EFT_no_na <- terra::focal(treatment_EFT_rast,
+                                      w = 21,
+                                      fun = "modal",
+                                      na.policy = "only")
+  names(treatment_EFT_no_na) <- "treatment_EFT"
+  
+  # interpolate NAs in PfPR layer just for extracting data
+  PfPR_no_na <- terra::focal(PfPR_rast,
+                             w = 3,
+                             fun = "mean",
+                             na.policy = "only")
+  names(PfPR_no_na) <- "PfPR"
+  
+  # build covariate stack
+  covariates <- c(treatment_EFT_no_na,PfPR_no_na)
+  # note need to scale the covariate layer but keen the original scale version for visualisation too
+  covariates <- scale(covariates)
+  covariates
+}
