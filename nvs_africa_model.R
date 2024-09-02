@@ -154,32 +154,32 @@ coords <- snp_data %>%
 # 
 # ggsave(paste0("figures/treatment_vis.png"),width = 10, height = 6, units = "in")
 
-ggplot() +
-  geom_spatraster(
-    data = log(pop)#terra::aggregate(pop,20,fun = "sum", na.rm = TRUE)/1e6
-  ) +
-  #facet_wrap(~lyr, nrow = 1, ncol = 3) +
-  scale_fill_gradientn(
-    #labels = scales::percent,
-    name = "log-population density",
-    #limits = c(0, 1),
-    na.value = "transparent",
-    colours = colorRampPalette(c("#B3E0A6FF","#24693DFF"))(100)
-  )  +
-  ggtitle(
-    label = "Human population density",
-    subtitle = "natural-log transformed population count on a 5km grid averaged over 2017-2020"
-  ) +
-  theme_snp_maps() +
-  geom_point(aes(x = longitude,
-                 y = latitude),
-             data = snp_data,
-             #col = "white",
-             shape = "+",
-             inherit.aes = TRUE,
-             size = 2)
-
-ggsave(paste0("figures/pop_vis_log.png"),width = 10, height = 6, units = "in")
+# ggplot() +
+#   geom_spatraster(
+#     data = log(pop)#terra::aggregate(pop,20,fun = "sum", na.rm = TRUE)/1e6
+#   ) +
+#   #facet_wrap(~lyr, nrow = 1, ncol = 3) +
+#   scale_fill_gradientn(
+#     #labels = scales::percent,
+#     name = "log-population density",
+#     #limits = c(0, 1),
+#     na.value = "transparent",
+#     colours = colorRampPalette(c("#B3E0A6FF","#24693DFF"))(100)
+#   )  +
+#   ggtitle(
+#     label = "Human population density",
+#     subtitle = "natural-log transformed population count on a 5km grid averaged over 2017-2020"
+#   ) +
+#   theme_snp_maps() +
+#   geom_point(aes(x = longitude,
+#                  y = latitude),
+#              data = snp_data,
+#              #col = "white",
+#              shape = "+",
+#              inherit.aes = TRUE,
+#              size = 2)
+# 
+# ggsave(paste0("figures/pop_vis_log.png"),width = 10, height = 6, units = "in")
 
 # extract out the design matrices (pre-scaled)
 
