@@ -5,7 +5,9 @@ cross_validate <- function(snp_data_idx,
                            coords = snp_coords,
                            null_model = FALSE) {
   
-  test_deviance_result <- c()
+  posterior_deviance_result <- c()
+  deviance_posterior_result <- c()
+  
   for (fold in unique(snp_data_idx$block_id)) {
     train <- snp_data_idx$block_id != fold
     test <- snp_data_idx$block_id == fold
@@ -41,17 +43,35 @@ cross_validate <- function(snp_data_idx,
     
     pred_rho <- train_model$model_arrays$rho_snps
     
-    test_deviance <- betabinomial_deviance_p_rho(pull(snp_data_idx[test,"snp_count"]),
-                                                 pull(snp_data_idx[test,"sample_size"]),
-                                                 p = snp_freq_test[cbind(1:nrow(snp_freq_test),
-                                                                   pull(snp_data_idx[test,"snp_id"]))],
-                                                 # the above is ugly but works 
-                                                 rho = pred_rho[pull(snp_data_idx[test,"snp_id"])])
+    p_test <- snp_freq_test[cbind(1:nrow(snp_freq_test),
+                                  pull(snp_data_idx[test,"snp_id"]))]
+    rho_test <- pred_rho[pull(snp_data_idx[test,"snp_id"])]
     
-    test_deviance_fit <- calculate(test_deviance,values = draws,nsim = 100)[[1]]
+    posterior_deviance <- betabinomial_deviance_p_rho(pull(snp_data_idx[test,"snp_count"]),
+                                                      pull(snp_data_idx[test,"sample_size"]),
+                                                      p = p_test,
+                                                      rho = rho_test
+                                                      )
     
-    test_deviance_result <- c(test_deviance_result,mean(test_deviance_fit))
+    posterior_deviance_mean <- calculate(posterior_deviance,values = draws,nsim = 100)[[1]] %>% mean
+    
+    p_test_post_mean <- calculate(p_test,values = draws,nsim = 100)[[1]] %>% mean
+    
+    p_test_post_mean <- calculate(p_test,values = draws,nsim = 100)[[1]] %>% mean
+    
+    deviance_posterior_mean <- betabinomial_deviance_p_rho(pull(snp_data_idx[test,"snp_count"]),
+                                                           pull(snp_data_idx[test,"sample_size"]),
+                                                           p = p_test_post_mean,
+                                                           rho = p_test_post_mean
+    )
+    
+    posterior_deviance_result <- c(posterior_deviance_result,posterior_deviance_mean)
+    
+    deviance_posterior_result <- c(deviance_posterior_result,deviance_posterior_mean)
   }
 
-  test_deviance_result
+  list(
+    posterior_deviance = posterior_deviance_result,
+    deviance_posterior = deviance_posterior_result
+  )
 }
