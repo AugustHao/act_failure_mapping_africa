@@ -23,7 +23,12 @@ gp_check <- function(spatial_latents,
   
   n_latents <- ncol(spatial_latents)
   
-  png("figures/gp_prior_check.png",width = 250 * n_latents, height = 300)
+  png(paste0("figures/gp_",
+             ifelse(is.null(posterior_sims),
+                    "prior",
+                    "posterior"),
+             "_check.png"),
+      width = 250 * n_latents, height = 300)
   
   if (plot_var) {
     par(mfcol = c(2,n_latents))

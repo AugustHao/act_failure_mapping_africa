@@ -12,6 +12,8 @@
 marginal_response_plot <- function(target_covariate,
                                    snp_idx,
                                    covariates,
+                                   beta, # snp by cov matrix
+                                   rho_snps,
                                    transformations = NULL,
                                    draws = draws,
                                    response_data = NULL,
@@ -23,12 +25,12 @@ marginal_response_plot <- function(target_covariate,
                               target_covariate = target_covariate,
                               transformations = transformations)
   
-  marginal_pred <- x %*% t(parameters$beta[snp_idx,]) 
+  marginal_pred <- x %*% t(beta[snp_idx,]) 
   marginal_pred <- ilogit(marginal_pred)
   
   marginal_pred <-  betabinomial_p_rho(N = 100,
-                                    p = marginal_pred,
-                                    rho = rho_snps[snp_idx])
+                                       p = marginal_pred,
+                                       rho = rho_snps[snp_idx])
   
   marginal_pred <- calculate(marginal_pred,
                              values = draws,
