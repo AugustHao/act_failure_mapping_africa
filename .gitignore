@@ -5,3 +5,7 @@
 .DS_Store
 README_cache
 /data
+/figures
+/_targets
+run.R
+run.sh
