@@ -29,7 +29,7 @@ build_snp_model <- function(snp_data,
     t(parameters$loadings %*% t(latents_obs))
   snp_freq_obs <- ilogit(snp_freq_logit_obs)
   
-  snp_data_index <- cbind(row_number(snp_data), snp_data$snp_id)
+  snp_data_index <- cbind(seq_len(nrow(snp_data)), snp_data$snp_id)
   
   # model overdispersion in the data via an overdispersion parameter rho. This
   # prior makes rho approximately uniform, but fairly nicely behaved

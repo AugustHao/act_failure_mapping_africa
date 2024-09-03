@@ -63,7 +63,7 @@ cross_validate <- function(snp_data_idx,
                                                            pull(snp_data_idx[test,"sample_size"]),
                                                            p = p_test_post_mean,
                                                            rho = p_test_post_mean
-    )
+    ) %>% mean
     
     posterior_deviance_result <- c(posterior_deviance_result,posterior_deviance_mean)
     
