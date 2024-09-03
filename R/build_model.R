@@ -16,7 +16,7 @@ build_snp_model <- function(snp_data,
                   variance = kernel_sd ^ 2)
   
   # define knots for reduced-rank GP approximation
-  kmn <- kmeans(coords, centers = 50)
+  kmn <- kmeans(coords, centers = 25)
   
   # define GPs over spatial latent factors, evaluated at all data locations
   latents_obs <- gp(x = coords,
@@ -29,7 +29,7 @@ build_snp_model <- function(snp_data,
     t(parameters$loadings %*% t(latents_obs))
   snp_freq_obs <- ilogit(snp_freq_logit_obs)
   
-  snp_data_index <- cbind(snp_data$coord_id, snp_data$snp_id)
+  snp_data_index <- cbind(row_number(snp_data), snp_data$snp_id)
   
   # model overdispersion in the data via an overdispersion parameter rho. This
   # prior makes rho approximately uniform, but fairly nicely behaved
@@ -44,12 +44,16 @@ build_snp_model <- function(snp_data,
   distribution(snp_data$snp_count) <- betabinomial_p_rho(N = snp_data$sample_size,
                                                          p = snp_freq_obs[snp_data_index],
                                                          rho = rho_snps[snp_data$snp_id])
+  
+  # trace only snps with data
+  snp_with_data <- snp_data$snp_id %>% unique()
+  
   # traced obj in model
   m <- model(kernel_lengthscale, 
              kernel_sd,
              logit_rho_mean,
-             logit_rho_raw,
-             parameters$beta)
+             logit_rho_raw[snp_with_data],
+             parameters$beta[snp_with_data,])
   
   # save all other other model obj too
   model_arrays <- list(
@@ -71,6 +75,7 @@ build_snp_model <- function(snp_data,
     n_snp = n_snp,
     X_obs = X_obs,
     coords = coords,
+    snp_with_data = snp_with_data,
     model_arrays = model_arrays,
     model = m
   )

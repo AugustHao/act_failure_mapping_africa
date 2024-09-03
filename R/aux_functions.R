@@ -90,7 +90,7 @@ build_covariate_stack <- function(treatment_EFT_rast, PfPR_rast) {
   covariates
 }
 
-get_CV_blocks <- function(snp_data,covariate_rast) {
+get_cv_blocks <- function(snp_data,covariate_rast) {
   # turn data into sf for blockCV
   snp_data_sf <- st_as_sf(snp_data,
                           coords = c("longitude","latitude"),
@@ -139,3 +139,19 @@ get_CV_blocks <- function(snp_data,covariate_rast) {
 #        k_sd = kernel_sd,
 #        latents_obs = latents_obs)
 # }
+
+# compute observation-level log like for beta binomial with p rho parameterisation
+betabinomial_ll_p_rho <- function(y, N, p, rho) {
+  
+  a <- p * (1 / rho - 1)
+  b <- a * (1 - p) / p
+  # get ll
+  # https://cran.r-project.org/web/packages/extras/vignettes/beta-binomial-deviance-residuals.html
+  lgamma(N + 1) - lgamma(y + 1) - lgamma(N - y + 1) + lgamma(y + a) + lgamma(N - y + b) - lgamma(N + a + b) + lgamma(a + b) - lgamma(a) - lgamma(b) 
+}
+
+# fudged deviance for beta binom, saturated model does not have a ll of 0 but
+# for purpose of model comparison it's enough
+betabinomial_deviance_p_rho <- function(y, N, p, rho) {
+  -2 * betabinomial_ll_p_rho(y, N, p, rho)
+}

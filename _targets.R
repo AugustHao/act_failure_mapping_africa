@@ -173,8 +173,8 @@ list(
   
   # get spatial CV blocks
   tar_target(
-    CV_blocks,
-    get_CV_blocks(snp_data,covariate_rast)
+    cv_blocks,
+    get_cv_blocks(snp_data,covariate_rast)
   ),
   
   # incorporate indices in the snp data
@@ -182,7 +182,28 @@ list(
              snp_data %>% 
                mutate(coord_id = row_number(),
                       snp_id = match(snp_name, snp_table$snp),
-                      block_id = CV_blocks$folds_ids)
+                      block_id = cv_blocks$folds_ids)
+  ),
+  
+  # cross validate with null model
+  tar_target(
+    cv_null_model_result,
+    cross_validate(snp_data_idx, 
+                   n_latent = 4,
+                   n_snp = n_snp,
+                   X_obs = X_obs,
+                   coords = snp_coords,
+                   null_model = TRUE)
+  ),
+  
+  # cross validate
+  tar_target(
+    cv_result,
+    cross_validate(snp_data_idx, 
+                   n_latent = 4,
+                   n_snp = n_snp,
+                   X_obs = X_obs,
+                   coords = snp_coords)
   ),
   
   # define model
@@ -207,8 +228,16 @@ list(
     draws,
     mcmc(model$model, 
          one_by_one = TRUE,
-         warmup = 2e3,
-         n_samples = 2e3)
+         warmup = 1e3,
+         n_samples = 1e3)
+  ),
+  
+  # check convergence is not too horrible
+  tar_target(
+    r_hats,
+    summary(coda::gelman.diag(draws,
+                              autoburnin = FALSE,
+                              multivariate = FALSE)$psrf)
   ),
   
   tar_target(
