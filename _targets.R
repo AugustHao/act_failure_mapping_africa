@@ -58,7 +58,8 @@ list(
   # load response data
   tar_target(
     snp_data_raw,
-    readr::read_csv("data/nvs_africa.csv")
+    #readr::read_csv("data/nvs_africa.csv")
+    read_wwarn("data/K13_surveyor_data.xls")
   ),
   
   # make a table of all snps
@@ -188,18 +189,18 @@ list(
   # cross validate with null model
   tar_target(
     cv_null_model_result,
-    cross_validate(snp_data_idx, 
+    cross_validate(snp_data_idx,
                    n_latent = 4,
                    n_snp = n_snp,
                    X_obs = X_obs,
                    coords = snp_coords,
                    null_model = TRUE)
   ),
-  
+
   # cross validate
   tar_target(
     cv_result,
-    cross_validate(snp_data_idx, 
+    cross_validate(snp_data_idx,
                    n_latent = 4,
                    n_snp = n_snp,
                    X_obs = X_obs,
@@ -228,8 +229,8 @@ list(
     draws,
     mcmc(model$model, 
          one_by_one = TRUE,
-         warmup = 1e3,
-         n_samples = 1e3)
+         warmup = 2e3,
+         n_samples = 2e3)
   ),
   
   # check convergence is not too horrible
@@ -252,5 +253,100 @@ list(
            width = 10,
            height = 7,
            bg = "white")
+  ),
+  
+  tar_target(
+    loadings,
+    model$model_arrays$parameters$loadings[snp_table$valid == TRUE,]
+  ),
+  
+  tar_target(
+    loadings_posterior,
+    calculate(loadings,
+              nsim = 100, 
+              values = draws)[[1]]
+  ),
+  
+  tar_target(
+    save_loading_plot,
+    plot_loading(loadings_posterior,
+                 snp_names = valid_snps,
+                 save_local = TRUE)
+  ),
+  
+  tar_target(
+    save_marginal_response_plots,
+    plot_marginal_response(X_obs = X_obs,
+                           snp_data = snp_data,
+                           snp_table = snp_table,
+                           snp_data_index = model$snp_data_index,
+                           draws = draws,
+                           beta = model$model_arrays$parameters$beta,
+                           rho_snps = model$model_arrays$rho_snps)
+  ),
+  
+  tar_target(
+    save_snp_residual_plots,
+    snp_residual_plot(
+      snp_table = snp_table,
+      snp_data_index = model$snp_data_index,
+      snp_data = snp_data,
+      snp_freq_obs = model$model_arrays$mean_snps,
+      rho_snps = model$model_arrays$rho_snps,
+      draws = draws
+    )
+  ),
+  
+  # diagnostic posterior plot for gp
+  tar_target(
+    gp_posterior_check_plot,
+    gp_check(model$model_arrays$gp,
+             treatment_EFT_coarse,
+             posterior_sims = draws)
+  ),
+  
+  tar_target(
+    pixel_sims_zoomed,
+    raster_pred_sims(
+      focus_ext = TRUE,
+      sample_raster = treatment_EFT_rast,
+      latents_obs = model$model_arrays$gp,
+      beta = model$model_arrays$parameters$beta,
+      loadings = model$model_arrays$parameters$loadings,
+      covariates = covariate_rast,
+      draws = draws
+    )
+  ),
+  
+  tar_target(
+    pixel_sims,
+    raster_pred_sims(
+      focus_ext = FALSE,
+      sample_raster = treatment_EFT_coarse,
+      latents_obs = model$model_arrays$gp,
+      beta = model$model_arrays$parameters$beta,
+      loadings = model$model_arrays$parameters$loadings,
+      covariates = covariate_rast,
+      draws = draws
+    )
+  ),
+  
+  tar_target(
+    plot_rast_sims,
+    plot_rast_pred(focus_ext = FALSE,
+                   sample_raster = treatment_EFT_coarse,
+                   snp_table = snp_table,
+                   pixel_sims = pixel_sims,
+                   snp_data = snp_data_idx)
+  ),
+  
+  tar_target(
+    plot_rast_sims_zoomed,
+    plot_rast_pred(focus_ext = TRUE,
+                   sample_raster = treatment_EFT_rast,
+                   snp_table = snp_table,
+                   pixel_sims = pixel_sims_zoomed,
+                   snp_data = snp_data_idx)
   )
+  
 )
