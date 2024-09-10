@@ -71,7 +71,7 @@ list(
       rename(snp = Var1,
              count = Freq) %>% 
       mutate(id = row_number(),
-             valid = snp %in% who_markers())
+             valid = snp %in% who_markers() & count >= 5)
   ),
   
   # count snps
@@ -84,7 +84,7 @@ list(
   tar_target(
     valid_snps,
     snp_table %>% 
-      filter(valid == TRUE & count >= 5) %>% 
+      filter(valid == TRUE) %>% 
       pull(snp) %>% 
       as.character()
   ),
@@ -92,7 +92,11 @@ list(
   # filter rows in the dataset
   tar_target(
     snp_data,
-    filter_snp_data(snp_data_raw, valid_snps = valid_snps)
+    filter_snp_data(snp_data_raw, 
+                    valid_snps = valid_snps,
+                    filter_rast = TRUE,
+                    rast = c(treatment_EFT_rast,PfPR_rast)
+                    )
   ),
   
   # get the snp coords
@@ -186,26 +190,26 @@ list(
                       block_id = cv_blocks$folds_ids)
   ),
   
-  # cross validate with null model
-  tar_target(
-    cv_null_model_result,
-    cross_validate(snp_data_idx,
-                   n_latent = 4,
-                   n_snp = n_snp,
-                   X_obs = X_obs,
-                   coords = snp_coords,
-                   null_model = TRUE)
-  ),
-
-  # cross validate
-  tar_target(
-    cv_result,
-    cross_validate(snp_data_idx,
-                   n_latent = 4,
-                   n_snp = n_snp,
-                   X_obs = X_obs,
-                   coords = snp_coords)
-  ),
+  # # cross validate with null model
+  # tar_target(
+  #   cv_null_model_result,
+  #   cross_validate(snp_data_idx,
+  #                  n_latent = 4,
+  #                  n_snp = n_snp,
+  #                  X_obs = X_obs,
+  #                  coords = snp_coords,
+  #                  null_model = TRUE)
+  # ),
+  # 
+  # # cross validate
+  # tar_target(
+  #   cv_result,
+  #   cross_validate(snp_data_idx,
+  #                  n_latent = 4,
+  #                  n_snp = n_snp,
+  #                  X_obs = X_obs,
+  #                  coords = snp_coords)
+  # ),
   
   # define model
   tar_target(

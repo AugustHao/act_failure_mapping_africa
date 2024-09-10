@@ -9,7 +9,7 @@ snp_residual_plot <- function(snp_table,
   # check residual for each snp
   for (i in snp_table$id[snp_table$valid == TRUE]) {
     
-    if (snp_table$count[i] < 3) {
+    if (snp_table$count[i] < 5) {
       cat("skip, too few obs \n")
     } else {
       this_snp_data_index <- snp_data_index[snp_data_index[,2] == i,]

@@ -58,13 +58,28 @@ who_markers <- function(){
 
 # filter snp data to exclude country level coordinates, those too old and those
 # outside the valid snp table
-filter_snp_data <- function(snp_data, year_range = 6, valid_snps) {
+filter_snp_data <- function(snp_data, 
+                            year_range = 6, 
+                            valid_snps,
+                            filter_rast = FALSE,
+                            rast = NULL) {
   year_cutoff <- (snp_data %>% pull(year_start) %>% max) - year_range
-  snp_data %>% 
+  snp_data <- snp_data %>% 
     filter(
       site_type != "Country", 
       year_start > year_cutoff,
       snp_name %in% valid_snps) 
+  
+  if (filter_rast) {
+    coords <- snp_data %>%
+      select(longitude,latitude) %>%
+      as.matrix()
+    cell_ids <- terra::cellFromXY(rast, coords)
+    vals <- terra::extract(rast, cell_ids)
+    valid_ids <- complete.cases(vals)
+    snp_data <- snp_data[valid_ids,]
+  }
+  snp_data
 }
 
 # build covariate stack, with interpolation over NA and scaling

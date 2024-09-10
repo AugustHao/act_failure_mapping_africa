@@ -15,13 +15,16 @@ build_snp_model <- function(snp_data,
   kernel <- mat52(lengthscales = c(kernel_lengthscale, kernel_lengthscale),
                   variance = kernel_sd ^ 2)
   
-  # define knots for reduced-rank GP approximation
-  kmn <- kmeans(coords, centers = 25)
+  # # define knots for reduced-rank GP approximation
+  # kmn <- kmeans(coords, centers = 25)
+  
+  # disregard, build full rank
+  # full rank
   
   # define GPs over spatial latent factors, evaluated at all data locations
   latents_obs <- gp(x = coords,
                     kernel = kernel,
-                    inducing = kmn$centers,
+                    inducing = unique(coords),
                     n = n_latent)
   
   # combine these with parameters to get matrices SNP frequencies at the SNP data locations
